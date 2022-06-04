@@ -1,5 +1,13 @@
 
-set(TESTING_INCLUDES ${CATCH_SINGLE_INCLUDE_DIR})
+include(FetchContent)
+
+FetchContent_Declare(
+  Catch2
+  GIT_REPOSITORY https://github.com/catchorg/Catch2.git
+  GIT_TAG v2.13.7
+)
+
+FetchContent_MakeAvailable(Catch2)
 
 function(add_clutch_test name)
   include_directories(${TESTING_INCLUDES} ${COMMON_INCLUDES})
@@ -11,7 +19,7 @@ function(add_clutch_test name)
     PRIVATE ${COMMON_INCLUDES}
     )
   add_test(${name}_test ${name}_test)
-  # target_link_libraries()
+  target_link_libraries(${name}_test PRIVATE Catch2)
 endfunction(add_clutch_test)
 
 message(STATUS ${CATCH_INCLUDE_DIR})
