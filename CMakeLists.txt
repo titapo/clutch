@@ -24,7 +24,7 @@ add_library(clutch INTERFACE)
 target_include_directories(clutch INTERFACE include)
 
 target_compile_features(clutch
-  INTERFACE cxx_std_17
+  INTERFACE cxx_std_11
   )
 
 include_directories(${CATCH_INCLUDE_DIR})
