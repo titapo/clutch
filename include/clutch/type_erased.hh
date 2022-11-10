@@ -3,6 +3,29 @@
 
 namespace clutch
 {
+
+  namespace detail
+  {
+    // TODO those are related operations
+    template <typename Repr>
+    void default_destroy(void* repr)
+    {
+      delete static_cast<Repr*>(repr);
+    }
+
+    template <typename Repr>
+    void* default_clone(void* repr)
+    {
+      return new Repr(*static_cast<Repr*>(repr));
+    }
+
+    template <typename Repr>
+    void* default_copy_from_value(Repr&& repr)
+    {
+      return new Repr(static_cast<Repr&&>(repr));
+    }
+  }
+
   struct type_erased
   {
     using DestroyFn = void(*)(void*);
@@ -17,9 +40,9 @@ namespace clutch
 
     template <typename Repr>
     type_erased(Repr p_repr, tag_t)
-      : repr(static_cast<void*>(new Repr(static_cast<Repr&&>(p_repr))))
-      , destroy_fn([](void* r) { delete static_cast<Repr*>(r); })
-      , clone_fn([](void* r) -> void* { return new Repr(*static_cast<Repr*>(r)); })
+      : repr(detail::default_copy_from_value(static_cast<Repr>(p_repr)))
+      , destroy_fn(detail::default_destroy<Repr>)
+      , clone_fn(detail::default_clone<Repr>)
     {}
 
     // copy
