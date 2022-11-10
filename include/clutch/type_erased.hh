@@ -29,10 +29,11 @@ namespace clutch
     }
   }
 
-  template <unsigned StorageSize>
-  void storage_cast_write(byte (&storage)[StorageSize], void* repr)
+  template <unsigned StorageSize, typename From>
+  void storage_cast_write(byte (&storage)[StorageSize], From&& from)
   {
-    std::memcpy(storage, &repr, StorageSize);
+    static_assert(sizeof(From) == StorageSize);
+    std::memcpy(storage, &from, StorageSize);
   }
 
   template <typename To, unsigned StorageSize>
@@ -43,27 +44,59 @@ namespace clutch
     return to;
   }
 
-  struct type_erased
+  template <size_t StorageSize>
+  struct basic_storage
+  {
+    using StorageType = byte[StorageSize];
+
+    StorageType storage;
+
+    basic_storage() = default; // FIXME!!!! remove this or fill with zeros
+
+    template <typename Arg>
+    basic_storage(Arg&& arg)
+    {
+      write(arg);
+    }
+
+    void copy_from(basic_storage& other)
+    {
+      std::memcpy(storage, other.storage, StorageSize);
+    }
+
+    template <typename From>
+    void write(From&& from)
+    {
+      static_assert(sizeof(From) == StorageSize);
+      std::memcpy(storage, &from, StorageSize);
+    }
+
+    template <typename To>
+    To read_as() const
+    {
+      To to;
+      std::memcpy(&to, storage, StorageSize);
+      return to;
+    }
+  };
+
+  // inherited because of possible Empty Base Optimization? (It never could be empty :/)
+  struct type_erased : basic_storage<sizeof(void*)>
   {
     using DestroyFn = void(*)(void*);
     using CloneFn = void*(*)(void *);
 
-    static constexpr auto StorageSize = sizeof(void*);
-    using StorageType = byte[StorageSize];
-
-    //void* repr{nullptr};
-    StorageType storage;
     DestroyFn destroy_fn;
     CloneFn clone_fn;
 
     void* repr()
     {
-      return storage_cast_read<void*>(storage);
+      return basic_storage::read_as<void*>();
     }
 
     void* repr() const
     {
-      return storage_cast_read<void*>(storage);
+      return basic_storage::read_as<void*>();
     }
 
     // used for distinguish templatized constructor from copy/move constructors
@@ -71,33 +104,27 @@ namespace clutch
 
     template <typename Repr>
     type_erased(Repr p_repr, tag_t)
-      //: repr(detail::default_copy_from_value(static_cast<Repr>(p_repr)))
-      //: storage(reinterpret_cast<StorageType>(detail::default_copy_from_value(static_cast<Repr>(p_repr))))
-      : destroy_fn(detail::default_destroy<Repr>)
+      : basic_storage(detail::default_copy_from_value(static_cast<Repr>(p_repr)))
+      , destroy_fn(detail::default_destroy<Repr>)
       , clone_fn(detail::default_clone<Repr>)
     {
-      storage_cast_write(storage, detail::default_copy_from_value(static_cast<Repr>(p_repr)));
     }
 
     // copy
     type_erased(const type_erased& other)
-      //: repr(other.clone_fn(other.repr))
-      //: storage(reinterpret_cast<byte*>(other.clone_fn(other.repr())))
-      : destroy_fn(other.destroy_fn)
+      : basic_storage(reinterpret_cast<byte*>(other.clone_fn(other.repr())))
+      , destroy_fn(other.destroy_fn)
       , clone_fn(other.clone_fn)
     {
-      storage_cast_write(storage, other.clone_fn(other.repr()));
     }
 
     // move
     type_erased(type_erased&& other)
-      //: storage(other.storage)
       : destroy_fn(other.destroy_fn)
       , clone_fn(other.clone_fn)
     {
-      std::memcpy(storage, other.storage, StorageSize);
-      //storage_cast_write(storage, s);
-      storage_cast_write(other.storage, nullptr);
+      basic_storage::copy_from(other);
+      other.basic_storage::write(nullptr);
     }
 
     ~type_erased()
@@ -107,9 +134,9 @@ namespace clutch
 
     type_erased& operator=(const type_erased& other)
     {
+      // TODO self assignment check?
       destroy_fn(repr());
-      storage_cast_write(storage, other.clone_fn(other.repr()));
-      //repr = other.clone_fn(other.repr);
+      basic_storage::write(other.clone_fn(other.repr()));
       destroy_fn = other.destroy_fn;
       clone_fn = other.clone_fn;
       return *this;
@@ -119,12 +146,10 @@ namespace clutch
     {
       // TODO self assignment check?
       destroy_fn(repr());
-      std::memcpy(storage, other.storage, StorageSize);
-      //repr = other.repr;
+      basic_storage::copy_from(other);
       destroy_fn = other.destroy_fn;
       clone_fn = other.clone_fn;
-      //other.repr = nullptr;
-      storage_cast_write(other.storage, nullptr);
+      other.basic_storage::write(nullptr);
       return *this;
     }
   };
