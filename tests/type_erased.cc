@@ -50,36 +50,36 @@ struct S
 SCENARIO("")
 {
   clutch::type_erased e(S{5}, {});
-  REQUIRE(static_cast<S*>(e.repr)->i == 5);
+  REQUIRE(static_cast<S*>(e.repr())->i == 5);
 
   WHEN("copied")
   {
     clutch::type_erased e2{e};
-    REQUIRE(static_cast<S*>(e.repr)->i == 5);
-    REQUIRE(static_cast<S*>(e2.repr)->i == 5);
+    REQUIRE(static_cast<S*>(e.repr())->i == 5);
+    REQUIRE(static_cast<S*>(e2.repr())->i == 5);
   }
 
   WHEN("copy-assigned")
   {
     clutch::type_erased e2{S{20}, {}};
     e2 = e;
-    REQUIRE(static_cast<S*>(e.repr)->i == 5);
-    REQUIRE(static_cast<S*>(e2.repr)->i == 5);
+    REQUIRE(static_cast<S*>(e.repr())->i == 5);
+    REQUIRE(static_cast<S*>(e2.repr())->i == 5);
   }
 
   WHEN("moved")
   {
     clutch::type_erased e2{std::move(e)};
-    REQUIRE(e.repr == nullptr);
-    REQUIRE(static_cast<S*>(e2.repr)->i == 5);
+    REQUIRE(e.repr() == nullptr);
+    REQUIRE(static_cast<S*>(e2.repr())->i == 5);
   }
 
   WHEN("move-assigned")
   {
     clutch::type_erased e2{S{20}, {}};
     e2 = std::move(e);
-    REQUIRE(e.repr == nullptr);
-    REQUIRE(static_cast<S*>(e2.repr)->i == 5);
+    REQUIRE(e.repr() == nullptr);
+    REQUIRE(static_cast<S*>(e2.repr())->i == 5);
   }
 
   WHEN("swapped")
@@ -87,8 +87,8 @@ SCENARIO("")
     using std::swap;
     clutch::type_erased e2{S{20}, {}};
     swap(e, e2);
-    REQUIRE(static_cast<S*>(e.repr)->i == 20);
-    REQUIRE(static_cast<S*>(e2.repr)->i == 5);
+    REQUIRE(static_cast<S*>(e.repr())->i == 20);
+    REQUIRE(static_cast<S*>(e2.repr())->i == 5);
   }
 
 }
