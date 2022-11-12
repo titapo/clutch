@@ -41,6 +41,39 @@ SCENARIO("type_erased")
   REQUIRE(counted::count == 0);
 }
 
+struct Complex
+{
+  Complex(int i, char c, bool b)
+    : i(i)
+    , c(c)
+    , b(b)
+  {}
+
+  int i{-2};
+  char c{'n'};
+  bool b{true};
+};
+
+// NOTE: direct access to repr is considered as a bad practice and should be impossible
+SCENARIO("emplace operations")
+{
+  GIVEN("...")
+  {
+    WHEN("in-place constructed")
+    {
+      auto e = clutch::type_erased(clutch::in_place_t<Complex>{}, 4, 'c', false);
+      THEN("contains proper values")
+      {
+        REQUIRE(static_cast<Complex*>(e.repr())->i == 4);
+        REQUIRE(static_cast<Complex*>(e.repr())->c == 'c');
+        REQUIRE(static_cast<Complex*>(e.repr())->b == false);
+      }
+    }
+  }
+}
+
+// TODO .emplace for "operator=(in_place)"
+
 struct S
 {
   int i{-1};

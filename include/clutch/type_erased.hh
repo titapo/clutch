@@ -29,6 +29,12 @@ namespace clutch
     {
       return new Repr(static_cast<Repr&&>(repr));
     }
+
+    template <typename Repr, typename... Args>
+    void* default_inplace_construct(Args&&... args)
+    {
+      return new Repr(static_cast<Args&&>(args)...);
+    }
   }
 
   template <unsigned StorageSize, typename From>
@@ -84,6 +90,9 @@ namespace clutch
       StorageType payload;
   };
 
+  template <typename T>
+  struct in_place_t {};
+
   struct type_erased
   {
     using DestroyFn = void(*)(void *);
@@ -109,6 +118,14 @@ namespace clutch
     template <typename Repr>
     type_erased(Repr p_repr, tag_t)
       : storage(detail::default_copy_from_value(static_cast<Repr>(p_repr)))
+      , destroy_fn(detail::default_destroy<Repr>)
+      , clone_fn(detail::default_clone<Repr>)
+    {
+    }
+
+    template <typename Repr, typename... Args>
+    type_erased(in_place_t<Repr> tag, Args&&... args)
+      : storage(detail::default_inplace_construct<Repr>(static_cast<Args&&>(args)...))
       , destroy_fn(detail::default_destroy<Repr>)
       , clone_fn(detail::default_clone<Repr>)
     {
