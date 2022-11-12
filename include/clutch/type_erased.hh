@@ -1,6 +1,8 @@
 #ifndef CLUTCH_TYPE_ERASED_HH_INCLUDED
 #define CLUTCH_TYPE_ERASED_HH_INCLUDED
 
+#include "utility.h"
+
 #include <cstring> // std::memcpy
 
 namespace clutch
@@ -110,48 +112,13 @@ namespace clutch
     {
     }
 
-    // copy
-    type_erased(const type_erased& other)
-      : basic_storage(reinterpret_cast<byte*>(other.clone_fn(other.repr())))
-      , destroy_fn(other.destroy_fn)
-      , clone_fn(other.clone_fn)
-    {
-    }
+    type_erased(const type_erased& other);
+    type_erased(type_erased&& other);
 
-    // move
-    type_erased(type_erased&& other)
-      : destroy_fn(other.destroy_fn)
-      , clone_fn(other.clone_fn)
-    {
-      basic_storage::copy_from(other);
-      other.basic_storage::write(nullptr);
-    }
+    type_erased& operator=(const type_erased& other);
+    type_erased& operator=(type_erased&& other);
 
-    ~type_erased()
-    {
-      destroy_fn(repr());
-    }
-
-    type_erased& operator=(const type_erased& other)
-    {
-      // TODO self assignment check?
-      destroy_fn(repr());
-      basic_storage::write(other.clone_fn(other.repr()));
-      destroy_fn = other.destroy_fn;
-      clone_fn = other.clone_fn;
-      return *this;
-    }
-
-    type_erased& operator=(type_erased&& other)
-    {
-      // TODO self assignment check?
-      destroy_fn(repr());
-      basic_storage::copy_from(other);
-      destroy_fn = other.destroy_fn;
-      clone_fn = other.clone_fn;
-      other.basic_storage::write(nullptr);
-      return *this;
-    }
+    ~type_erased();
   };
 
 

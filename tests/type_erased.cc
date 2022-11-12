@@ -93,3 +93,88 @@ SCENARIO("")
 
 }
 
+// Here is the current best way to use it
+// There is a lot of opportunity for improvement
+
+class Animal : public clutch::type_erased
+{
+  public:
+    std::string talk(int i)
+    {
+      return talk_fn(repr(), i);
+    }
+
+    using TalkFn = clutch::erased_member_function<decltype(&Animal::talk)>::type;
+    TalkFn talk_fn;
+
+    template <typename T>
+    Animal(T&& t)
+      : type_erased(t, {})
+      , talk_fn(&clutch::erase_mem_fn<&T::talk>::call)
+    {}
+
+};
+
+struct Cat
+{
+  std::string talk(int i)
+  {
+    return "Meow";
+  }
+};
+
+struct Dog
+{
+  std::string talk(int i)
+  {
+    return "Vau";
+  }
+};
+
+SCENARIO("derived class in action")
+{
+  GIVEN("a cat")
+  {
+    Animal animal{Cat{}};
+
+    WHEN("it talks")
+    {
+      const auto out = animal.talk(3);
+
+      THEN("it returned: Meow")
+      {
+        REQUIRE(out == "Meow");
+      }
+    }
+  }
+
+  GIVEN("a dog")
+  {
+    Animal animal{Dog{}};
+
+    WHEN("it talks")
+    {
+      const auto out = animal.talk(3);
+
+      THEN("it returned: Vau")
+      {
+        REQUIRE(out == "Vau");
+      }
+    }
+  }
+
+  GIVEN("a cat as an animal")
+  {
+    Animal animal{Cat{}};
+    WHEN("it is overridden by a dog")
+    {
+      animal = Dog{};
+      THEN("it talks as a dog")
+      {
+        REQUIRE(animal.talk(2) == "Vau");
+      }
+    }
+  }
+}
+
+// TODO emplacement should be supported
