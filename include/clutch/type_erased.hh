@@ -49,56 +49,58 @@ namespace clutch
   template <size_t StorageSize>
   struct basic_storage
   {
-    using StorageType = byte[StorageSize];
+    public:
+      using StorageType = byte[StorageSize];
 
-    StorageType storage;
+      basic_storage() = default; // FIXME!!!! remove this or fill with zeros
 
-    basic_storage() = default; // FIXME!!!! remove this or fill with zeros
+      template <typename Arg>
+      basic_storage(Arg&& arg)
+      {
+        write(arg);
+      }
 
-    template <typename Arg>
-    basic_storage(Arg&& arg)
-    {
-      write(arg);
-    }
+      void copy_from(basic_storage& other)
+      {
+        std::memcpy(payload, other.payload, StorageSize);
+      }
 
-    void copy_from(basic_storage& other)
-    {
-      std::memcpy(storage, other.storage, StorageSize);
-    }
+      template <typename From>
+      void write(From&& from)
+      {
+        static_assert(sizeof(From) == StorageSize);
+        std::memcpy(payload, &from, StorageSize);
+      }
 
-    template <typename From>
-    void write(From&& from)
-    {
-      static_assert(sizeof(From) == StorageSize);
-      std::memcpy(storage, &from, StorageSize);
-    }
+      template <typename To>
+      To read_as() const
+      {
+        To to;
+        std::memcpy(&to, payload, StorageSize);
+        return to;
+      }
 
-    template <typename To>
-    To read_as() const
-    {
-      To to;
-      std::memcpy(&to, storage, StorageSize);
-      return to;
-    }
+    private:
+      StorageType payload;
   };
 
-  // inherited because of possible Empty Base Optimization? (It never could be empty :/)
-  struct type_erased : basic_storage<sizeof(void*)>
+  struct type_erased
   {
-    using DestroyFn = void(*)(void*);
-    using CloneFn = void*(*)(void *);
+    using DestroyFn = void(*)(void *);
+    using CloneFn = void *(*)(void *);
 
+    basic_storage<sizeof(void*)> storage;
     DestroyFn destroy_fn;
     CloneFn clone_fn;
 
     void* repr()
     {
-      return basic_storage::read_as<void*>();
+      return storage.read_as<void*>();
     }
 
     void* repr() const
     {
-      return basic_storage::read_as<void*>();
+      return storage.read_as<void*>();
     }
 
     // used for distinguish templatized constructor from copy/move constructors
@@ -106,7 +108,7 @@ namespace clutch
 
     template <typename Repr>
     type_erased(Repr p_repr, tag_t)
-      : basic_storage(detail::default_copy_from_value(static_cast<Repr>(p_repr)))
+      : storage(detail::default_copy_from_value(static_cast<Repr>(p_repr)))
       , destroy_fn(detail::default_destroy<Repr>)
       , clone_fn(detail::default_clone<Repr>)
     {
