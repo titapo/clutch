@@ -1,6 +1,6 @@
 #define CATCH_CONFIG_MAIN
 
-#include <clutch/type_erased.hh>
+#include <clutch/type_erased.h>
 
 #include <catch2/catch.hpp>
 

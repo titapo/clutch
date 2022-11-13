@@ -1,5 +1,5 @@
 
-#include <clutch/type_erased.hh>
+#include <clutch/type_erased.h>
 
 // copy
 clutch::type_erased::type_erased(const type_erased& other)
