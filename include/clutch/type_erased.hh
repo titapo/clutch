@@ -2,13 +2,10 @@
 #define CLUTCH_TYPE_ERASED_HH_INCLUDED
 
 #include "utility.h"
-
-#include <cstring> // std::memcpy
+#include "basic_storage.h"
 
 namespace clutch
 {
-  using byte = unsigned char;
-
   namespace detail
   {
     // TODO those are related operations
@@ -36,59 +33,6 @@ namespace clutch
       return new Repr(static_cast<Args&&>(args)...);
     }
   }
-
-  template <unsigned StorageSize, typename From>
-  void storage_cast_write(byte (&storage)[StorageSize], From&& from)
-  {
-    static_assert(sizeof(From) == StorageSize);
-    std::memcpy(storage, &from, StorageSize);
-  }
-
-  template <typename To, unsigned StorageSize>
-  To storage_cast_read(const byte (&storage)[StorageSize])
-  {
-    To to;
-    std::memcpy(&to, storage, StorageSize);
-    return to;
-  }
-
-  template <size_t StorageSize>
-  struct basic_storage
-  {
-    public:
-      using StorageType = byte[StorageSize];
-
-      basic_storage() = default; // FIXME!!!! remove this or fill with zeros
-
-      template <typename Arg>
-      basic_storage(Arg&& arg)
-      {
-        write(arg);
-      }
-
-      void copy_from(basic_storage& other)
-      {
-        std::memcpy(payload, other.payload, StorageSize);
-      }
-
-      template <typename From>
-      void write(From&& from)
-      {
-        static_assert(sizeof(From) == StorageSize);
-        std::memcpy(payload, &from, StorageSize);
-      }
-
-      template <typename To>
-      To read_as() const
-      {
-        To to;
-        std::memcpy(&to, payload, StorageSize);
-        return to;
-      }
-
-    private:
-      StorageType payload;
-  };
 
   template <typename T>
   struct in_place_t {};
