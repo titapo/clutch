@@ -25,24 +25,26 @@ namespace clutch
     };
 
     template <typename Repr, typename... Args>
-    void* default_construct(const heap_allocator& allocator, Args&&... args)
+    void default_construct(basic_storage<8>& storage, Args&&... args)
     {
-      void* ptr = allocator.allocate(sizeof(Repr));
-      return new (ptr) Repr(static_cast<Args&&>(args)...);
+      void* ptr = heap_allocator{}.allocate(sizeof(Repr));
+      new (ptr) Repr(static_cast<Args&&>(args)...);
+      storage.write(ptr);
     }
 
     // TODO those are related operations
     template <typename Repr>
-    void default_destroy(void* repr, const heap_allocator& allocator)
+    void default_destroy(void* repr, basic_storage<8>& storage)
     {
       static_cast<Repr*>(repr)->~Repr();
-      allocator.deallocate(repr);
+      heap_allocator{}.deallocate(repr);
+      storage.write(nullptr);
     }
 
     template <typename Repr>
-    void* default_clone(const void* repr, const heap_allocator& allocator)
+    void default_clone(const void* repr, basic_storage<8>& storage)
     {
-      return default_construct<Repr>(allocator, *static_cast<const Repr*>(repr));
+      return default_construct<Repr>(storage, *static_cast<const Repr*>(repr));
     }
   }
 
@@ -51,10 +53,13 @@ namespace clutch
 
   struct type_erased
   {
-    using DestroyFn = void(*)(void *, const detail::heap_allocator&);
-    using CloneFn = void *(*)(const void *, const detail::heap_allocator&);
+    static constexpr size_t StorageSize = sizeof(void*);
+    using StorageType = basic_storage<StorageSize>;
 
-    basic_storage<sizeof(void*)> storage;
+    using DestroyFn = void(*)(void *, StorageType&);
+    using CloneFn = void(*)(const void *, StorageType&);
+
+    StorageType storage;
     DestroyFn destroy_fn;
     CloneFn clone_fn;
 
@@ -73,18 +78,18 @@ namespace clutch
 
     template <typename Repr>
     type_erased(Repr p_repr, tag_t)
-      : storage(detail::default_construct<Repr>(detail::heap_allocator{}, static_cast<Repr>(p_repr)))
-      , destroy_fn(detail::default_destroy<Repr>)
+      : destroy_fn(detail::default_destroy<Repr>)
       , clone_fn(detail::default_clone<Repr>)
     {
+      detail::default_construct<Repr>(storage, static_cast<Repr>(p_repr));
     }
 
     template <typename Repr, typename... Args>
     type_erased(in_place_t<Repr> tag, Args&&... args)
-      : storage(detail::default_construct<Repr>(detail::heap_allocator{}, static_cast<Args&&>(args)...))
-      , destroy_fn(detail::default_destroy<Repr>)
+      : destroy_fn(detail::default_destroy<Repr>)
       , clone_fn(detail::default_clone<Repr>)
     {
+      detail::default_construct<Repr>(storage, static_cast<Args&&>(args)...);
     }
 
     type_erased(const type_erased& other);
