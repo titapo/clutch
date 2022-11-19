@@ -14,8 +14,8 @@ clutch::type_erased::type_erased(type_erased&& other)
   : destroy_fn(other.destroy_fn)
   , clone_fn(other.clone_fn)
 {
-  storage.copy_from(other.storage);
-  other.storage.write(nullptr);
+  storage.storage.copy_from(other.storage.storage);
+  other.storage.storage.write(nullptr);
 }
 
 clutch::type_erased& clutch::type_erased::operator=(const type_erased& other)
@@ -32,10 +32,10 @@ clutch::type_erased& clutch::type_erased::operator=(type_erased&& other)
 {
   // TODO self assignment check?
   destroy_fn(repr(), storage);
-  storage.copy_from(other.storage);
+  storage.storage.copy_from(other.storage.storage);
   destroy_fn = other.destroy_fn;
   clone_fn = other.clone_fn;
-  other.storage.write(nullptr);
+  other.storage.storage.write(nullptr);
   return *this;
 }
 
