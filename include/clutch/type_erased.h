@@ -111,10 +111,9 @@ namespace clutch
   template <typename T>
   struct in_place_t {};
 
-  struct type_erased
+  template <typename StorageType>
+  struct basic_erased_type
   {
-    using StorageType = heap_storage;
-
     using DestroyFn = void(*)(void *, StorageType&);
     using CloneFn = void(*)(const void *, StorageType&);
 
@@ -136,57 +135,7 @@ namespace clutch
     struct tag_t {};
 
     template <typename Repr>
-    type_erased(Repr p_repr, tag_t)
-      : destroy_fn(StorageType::destroy<Repr>)
-      , clone_fn(StorageType::clone<Repr>)
-    {
-      StorageType::construct<Repr>(storage, static_cast<Repr>(p_repr));
-    }
-
-    template <typename Repr, typename... Args>
-    type_erased(in_place_t<Repr> tag, Args&&... args)
-      : destroy_fn(StorageType::destroy<Repr>)
-      , clone_fn(StorageType::clone<Repr>)
-    {
-      StorageType::construct<Repr>(storage, static_cast<Args&&>(args)...);
-    }
-
-    type_erased(const type_erased& other);
-    type_erased(type_erased&& other);
-
-    type_erased& operator=(const type_erased& other);
-    type_erased& operator=(type_erased&& other);
-
-    ~type_erased();
-  };
-
-  template <size_t StorageSize = 8>
-  struct buffered_type_erased
-  {
-    using StorageType = fixed_storage<StorageSize>;
-
-    using DestroyFn = void(*)(void *, StorageType&);
-    using CloneFn = void(*)(const void *, StorageType&);
-
-    StorageType storage;
-    DestroyFn destroy_fn;
-    CloneFn clone_fn;
-
-    void* repr()
-    {
-      return storage.read();
-    }
-
-    const void* repr() const
-    {
-      return storage.read();
-    }
-
-    // used for distinguish templatized constructor from copy/move constructors
-    struct tag_t {};
-
-    template <typename Repr>
-    buffered_type_erased(Repr p_repr, tag_t)
+    basic_erased_type(Repr p_repr, tag_t)
       : destroy_fn(StorageType::template destroy<Repr>)
       , clone_fn(&StorageType::template clone<Repr>)
     {
@@ -194,26 +143,26 @@ namespace clutch
     }
 
     template <typename Repr, typename... Args>
-    buffered_type_erased(in_place_t<Repr> tag, Args&&... args)
+    basic_erased_type(in_place_t<Repr> tag, Args&&... args)
       : destroy_fn(StorageType::template destroy<Repr>)
       , clone_fn(StorageType::template clone<Repr>)
     {
       StorageType::template construct<Repr>(storage, static_cast<Args&&>(args)...);
     }
 
-    buffered_type_erased(const buffered_type_erased& other);
-    buffered_type_erased(buffered_type_erased&& other);
+    basic_erased_type(const basic_erased_type& other);
+    basic_erased_type(basic_erased_type&& other);
 
-    buffered_type_erased& operator=(const buffered_type_erased& other);
-    buffered_type_erased& operator=(buffered_type_erased&& other);
+    basic_erased_type& operator=(const basic_erased_type& other);
+    basic_erased_type& operator=(basic_erased_type&& other);
 
-    ~buffered_type_erased();
+    ~basic_erased_type();
   };
 
 
   // copy
-  template <size_t StorageSize>
-  buffered_type_erased<StorageSize>::buffered_type_erased(const buffered_type_erased<StorageSize>& other)
+  template <typename StorageType>
+  basic_erased_type<StorageType>::basic_erased_type(const basic_erased_type<StorageType>& other)
     : destroy_fn(other.destroy_fn)
     , clone_fn(other.clone_fn)
   {
@@ -221,8 +170,8 @@ namespace clutch
   }
 
   // move
-  template <size_t StorageSize>
-  buffered_type_erased<StorageSize>::buffered_type_erased(buffered_type_erased<StorageSize>&& other)
+  template <typename StorageType>
+  basic_erased_type<StorageType>::basic_erased_type(basic_erased_type<StorageType>&& other)
     : destroy_fn(other.destroy_fn)
     , clone_fn(other.clone_fn)
   {
@@ -230,8 +179,8 @@ namespace clutch
     other.storage.storage.write(nullptr);
   }
 
-  template <size_t StorageSize>
-  buffered_type_erased<StorageSize>& buffered_type_erased<StorageSize>::operator=(const buffered_type_erased<StorageSize>& other)
+  template <typename StorageType>
+  basic_erased_type<StorageType>& basic_erased_type<StorageType>::operator=(const basic_erased_type<StorageType>& other)
   {
     // TODO self assignment check?
     destroy_fn(repr(), storage);
@@ -241,8 +190,8 @@ namespace clutch
     return *this;
   }
 
-  template <size_t StorageSize>
-  buffered_type_erased<StorageSize>& buffered_type_erased<StorageSize>::operator=(buffered_type_erased<StorageSize>&& other)
+  template <typename StorageType>
+  basic_erased_type<StorageType>& basic_erased_type<StorageType>::operator=(basic_erased_type<StorageType>&& other)
   {
     // TODO self assignment check?
     destroy_fn(repr(), storage);
@@ -253,11 +202,16 @@ namespace clutch
     return *this;
   }
 
-  template <size_t StorageSize>
-  buffered_type_erased<StorageSize>::~buffered_type_erased()
+  template <typename StorageType>
+  basic_erased_type<StorageType>::~basic_erased_type()
   {
     destroy_fn(repr(), storage);
   }
+
+  using type_erased = basic_erased_type<heap_storage>;
+
+  template <size_t StorageSize>
+  using buffered_type_erased = basic_erased_type<fixed_storage<StorageSize>>;
 
 }
 
