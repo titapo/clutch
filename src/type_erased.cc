@@ -43,4 +43,3 @@ clutch::type_erased::~type_erased()
 {
   destroy_fn(repr(), detail::heap_allocator{});
 }
-
