@@ -128,6 +128,7 @@ TEMPLATE_TEST_CASE("transfer operations", "", clutch::type_erased, clutch::buffe
 
 }
 
+
 // Here is the current best way to use it
 // There is a lot of opportunity for improvement
 
@@ -135,38 +136,58 @@ template <typename TypeErasedBase>
 class Animal : public TypeErasedBase
 {
   public:
-    std::string talk(int i)
+    std::string talk(int i) const
     {
       return talk_fn(TypeErasedBase::repr(), i);
     }
 
+    std::string eat(double d)
+    {
+      return eat_fn(TypeErasedBase::repr(), d);
+    }
+
     using TalkFn = typename clutch::erased_member_function<decltype(&Animal<TypeErasedBase>::talk)>::type;
+    using EatFn = typename clutch::erased_member_function<decltype(&Animal<TypeErasedBase>::eat)>::type;
+
     TalkFn talk_fn;
+    EatFn eat_fn;
 
     template <typename T>
     Animal(T&& t)
       : TypeErasedBase(t, {})
       , talk_fn(&clutch::erase_mem_fn<&T::talk>::call)
+      , eat_fn(&clutch::erase_mem_fn<&T::eat>::call)
     {}
 
 };
 
 struct Cat
 {
-  std::string talk(int i)
+  std::string talk(int i) const
   {
     return "Meow";
+  }
+
+  std::string eat(double d)
+  {
+    return "catfood";
   }
 };
 
 struct Dog
 {
-  std::string talk(int i)
+  std::string talk(int i) const
   {
     return "Vau";
   }
+
+  std::string eat(double d)
+  {
+    return "dogfood";
+  }
 };
 
+// TODO split this test based on behaviour
 TEMPLATE_TEST_CASE("derived class in action", "", clutch::type_erased, clutch::buffered_type_erased<8>)
 {
   using MyAnimal = Animal<TestType>;
@@ -213,5 +234,69 @@ TEMPLATE_TEST_CASE("derived class in action", "", clutch::type_erased, clutch::b
     }
   }
 }
+
+struct Button
+{
+  Button(const std::string& title)
+    : title{title}
+  {}
+
+  std::string title{};
+};
+
+std::string foo(const Button& button, int i)
+{
+  return "Button[" + button.title + "]";
+}
+
+
+
+template <typename TypeErasedBase>
+class Widget : public TypeErasedBase
+{
+  public:
+    std::string foo(int i) const
+    {
+      return foo_fn(TypeErasedBase::repr(), i);
+    }
+
+    //std::string bar(double d)
+    //{
+    //  return bar_fn(TypeErasedBase::repr(), d);
+    //}
+
+    using FooFn = typename clutch::erased_member_function<decltype(&Widget<TypeErasedBase>::foo)>::type;
+    //using BarFn = typename clutch::erased_member_function<decltype(&Widget<TypeErasedBase>::bar)>::type;
+
+    FooFn foo_fn;
+    //BarFn bar_fn;
+
+    template <typename T, typename... Args>
+    Widget(clutch::in_place_t<T> tag, Args&&... args)
+      : TypeErasedBase(tag, static_cast<Args>(args)...)
+      , foo_fn(&clutch::erase_fn<static_cast<std::string(*)(const T&,int)>(&::foo)>::call)
+      //, bar_fn(&clutch::erase_fn<&bar>::call)
+    {}
+
+    /*
+    template <typename T>
+    Widget(T&& t)
+      : TypeErasedBase(t, {})
+      , foo_fn(&clutch::erase_fn<&foo>::call)
+      //, bar_fn(&clutch::erase_fn<&bar>::call)
+    {}
+    */
+
+};
+
+// SCENARIO erase_function works with free functions
+TEMPLATE_TEST_CASE("erase_function works with free function", "", clutch::type_erased, clutch::buffered_type_erased<32>)
+{
+  using MyWidget = Widget<TestType>;
+  MyWidget mywidget{clutch::in_place_t<Button>{}, "hello"};
+  REQUIRE(mywidget.foo(4) == "Button[hello]");
+
+}
+
 
 // TODO emplacement should be supported
