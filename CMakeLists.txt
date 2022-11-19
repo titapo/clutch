@@ -20,11 +20,11 @@ set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
 set(COMMON_INCLUDES ${PROJECT_SOURCE_DIR}/include)
 set(EXTERNAL_DIR ${PROJECT_SOURCE_DIR}/external)
 
-add_library(clutch src/type_erased.cc)
-target_include_directories(clutch PUBLIC include)
+add_library(clutch INTERFACE)
+target_include_directories(clutch INTERFACE include)
 
 target_compile_features(clutch
-  PUBLIC cxx_std_11
+  INTERFACE cxx_std_11
   )
 
 include_directories(${CATCH_INCLUDE_DIR})

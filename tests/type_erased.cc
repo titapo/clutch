@@ -13,12 +13,13 @@ struct counted
   ~counted() { --count; }
 };
 
-SCENARIO("type_erased")
+TEMPLATE_TEST_CASE("type_erased", "", clutch::type_erased, clutch::buffered_type_erased<1>)
 {
+  using TypeErased = TestType;
   REQUIRE(counted::count == 0);
   WHEN("created with a temporary")
   {
-    clutch::type_erased te(counted{}, {});
+    TypeErased te(counted{}, {});
     THEN("a single instance is held")
     {
       REQUIRE(counted::count == 1);
@@ -30,7 +31,7 @@ SCENARIO("type_erased")
     REQUIRE(counted::count == 1);
     WHEN("type_erased created from it")
     {
-      clutch::type_erased te(c1, {});
+      TypeErased te(c1, {});
       THEN("another instance is held")
       {
         REQUIRE(counted::count == 2);
@@ -55,13 +56,14 @@ struct Complex
 };
 
 // NOTE: direct access to repr is considered as a bad practice and should be impossible
-SCENARIO("emplace operations")
+TEMPLATE_TEST_CASE("emplace operations", "", clutch::type_erased, clutch::buffered_type_erased<8>)
 {
+  using TypeErased = TestType;
   GIVEN("...")
   {
     WHEN("in-place constructed")
     {
-      auto e = clutch::type_erased(clutch::in_place_t<Complex>{}, 4, 'c', false);
+      auto e = TypeErased(clutch::in_place_t<Complex>{}, 4, 'c', false);
       THEN("contains proper values")
       {
         REQUIRE(static_cast<Complex*>(e.repr())->i == 4);
@@ -80,7 +82,7 @@ struct S
 };
 
 // NOTE: direct access to repr is considered as a bad practice
-SCENARIO("")
+TEMPLATE_TEST_CASE("transfer operations", "", clutch::type_erased, clutch::buffered_type_erased<16>)
 {
   clutch::type_erased e(S{5}, {});
   REQUIRE(static_cast<S*>(e.repr())->i == 5);
@@ -129,20 +131,21 @@ SCENARIO("")
 // Here is the current best way to use it
 // There is a lot of opportunity for improvement
 
-class Animal : public clutch::type_erased
+template <typename TypeErasedBase>
+class Animal : public TypeErasedBase
 {
   public:
     std::string talk(int i)
     {
-      return talk_fn(repr(), i);
+      return talk_fn(TypeErasedBase::repr(), i);
     }
 
-    using TalkFn = clutch::erased_member_function<decltype(&Animal::talk)>::type;
+    using TalkFn = typename clutch::erased_member_function<decltype(&Animal<TypeErasedBase>::talk)>::type;
     TalkFn talk_fn;
 
     template <typename T>
     Animal(T&& t)
-      : type_erased(t, {})
+      : TypeErasedBase(t, {})
       , talk_fn(&clutch::erase_mem_fn<&T::talk>::call)
     {}
 
@@ -164,11 +167,12 @@ struct Dog
   }
 };
 
-SCENARIO("derived class in action")
+TEMPLATE_TEST_CASE("derived class in action", "", clutch::type_erased, clutch::buffered_type_erased<8>)
 {
+  using MyAnimal = Animal<TestType>;
   GIVEN("a cat")
   {
-    Animal animal{Cat{}};
+    MyAnimal animal{Cat{}};
 
     WHEN("it talks")
     {
@@ -183,7 +187,7 @@ SCENARIO("derived class in action")
 
   GIVEN("a dog")
   {
-    Animal animal{Dog{}};
+    MyAnimal animal{Dog{}};
 
     WHEN("it talks")
     {
@@ -198,7 +202,7 @@ SCENARIO("derived class in action")
 
   GIVEN("a cat as an animal")
   {
-    Animal animal{Cat{}};
+    MyAnimal animal{Cat{}};
     WHEN("it is overridden by a dog")
     {
       animal = Dog{};

@@ -41,6 +41,16 @@ namespace clutch
         return to;
       }
 
+      void* data()
+      {
+        return payload;
+      }
+
+      const void* data() const
+      {
+        return payload;
+      }
+
     private:
       StorageType payload;
   };

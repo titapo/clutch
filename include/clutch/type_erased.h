@@ -4,9 +4,12 @@
 #include "utility.h"
 #include "basic_storage.h"
 #include <cstdlib>
+#include <utility>
+#include <iostream>
 
 namespace clutch
 {
+
   namespace detail
   {
     struct heap_allocator
@@ -21,79 +24,194 @@ namespace clutch
         std::free(ptr);
       }
     };
+  }
+
+  struct heap_storage
+  {
+    static constexpr size_t StorageSize = sizeof(void*);
+    using StorageType = basic_storage<StorageSize>;
+
+    void* read()
+    {
+      return storage.read_as<void*>();
+    }
+
+    const void* read() const
+    {
+      return storage.read_as<void*>();
+    }
 
     template <typename Repr, typename... Args>
-    void* default_construct(const heap_allocator& allocator, Args&&... args)
+    static void construct(heap_storage& storage, Args&&... args)
     {
-      void* ptr = allocator.allocate(sizeof(Repr));
-      return new (ptr) Repr(static_cast<Args&&>(args)...);
+      void* ptr = detail::heap_allocator{}.allocate(sizeof(Repr));
+      new (ptr) Repr(static_cast<Args&&>(args)...);
+      storage.storage.write(ptr);
     }
 
     // TODO those are related operations
     template <typename Repr>
-    void default_destroy(void* repr, const heap_allocator& allocator)
+    static void destroy(void* repr, heap_storage& storage)
     {
       static_cast<Repr*>(repr)->~Repr();
-      allocator.deallocate(repr);
+      detail::heap_allocator{}.deallocate(repr);
+      storage.storage.write(nullptr);
     }
 
     template <typename Repr>
-    void* default_clone(void* repr, const heap_allocator& allocator)
+    static void clone(const void* repr, heap_storage& storage)
     {
-      return default_construct<Repr>(allocator, *static_cast<Repr*>(repr));
+      return construct<Repr>(storage, *static_cast<const Repr*>(repr));
     }
-  }
+
+
+    StorageType storage;
+  };
+
+  template <size_t StorageSize>
+  struct fixed_storage
+  {
+    using StorageType = basic_storage<StorageSize>;
+
+    void* read()
+    {
+      return storage.data();
+    }
+
+    const void* read() const
+    {
+      return storage.data();
+    }
+
+    template <typename Repr, typename... Args>
+    static void construct(fixed_storage<StorageSize>& storage, Args&&... args)
+    {
+      // TODO Should alignment be considered here
+      static_assert(sizeof(typename std::remove_reference<Repr>::type) <= StorageSize);
+      void* ptr = storage.storage.data();
+      new (ptr) Repr(static_cast<Args&&>(args)...);
+    }
+
+    // TODO those are related operations
+    template <typename Repr>
+    static void destroy(void* repr, fixed_storage<StorageSize>& storage)
+    {
+      static_cast<Repr*>(repr)->~Repr();
+    }
+
+    template <typename Repr>
+    static void clone(const void* repr, fixed_storage<StorageSize>& storage)
+    {
+      return construct<Repr>(storage, *static_cast<const Repr*>(repr));
+    }
+
+    StorageType storage;
+  };
 
   template <typename T>
   struct in_place_t {};
 
-  struct type_erased
+  template <typename StorageType>
+  struct basic_erased_type
   {
-    using DestroyFn = void(*)(void *, const detail::heap_allocator&);
-    using CloneFn = void *(*)(void *, const detail::heap_allocator&);
+    using DestroyFn = void(*)(void *, StorageType&);
+    using CloneFn = void(*)(const void *, StorageType&);
 
-    basic_storage<sizeof(void*)> storage;
+    StorageType storage;
     DestroyFn destroy_fn;
     CloneFn clone_fn;
 
     void* repr()
     {
-      return storage.read_as<void*>();
+      return storage.read();
     }
 
-    void* repr() const
+    const void* repr() const
     {
-      return storage.read_as<void*>();
+      return storage.read();
     }
 
     // used for distinguish templatized constructor from copy/move constructors
     struct tag_t {};
 
     template <typename Repr>
-    type_erased(Repr p_repr, tag_t)
-      : storage(detail::default_construct<Repr>(detail::heap_allocator{}, static_cast<Repr>(p_repr)))
-      , destroy_fn(detail::default_destroy<Repr>)
-      , clone_fn(detail::default_clone<Repr>)
+    basic_erased_type(Repr p_repr, tag_t)
+      : destroy_fn(StorageType::template destroy<Repr>)
+      , clone_fn(&StorageType::template clone<Repr>)
     {
+      StorageType::template construct<Repr>(storage, static_cast<Repr>(p_repr));
     }
 
     template <typename Repr, typename... Args>
-    type_erased(in_place_t<Repr> tag, Args&&... args)
-      : storage(detail::default_construct<Repr>(detail::heap_allocator{}, static_cast<Args&&>(args)...))
-      , destroy_fn(detail::default_destroy<Repr>)
-      , clone_fn(detail::default_clone<Repr>)
+    basic_erased_type(in_place_t<Repr> tag, Args&&... args)
+      : destroy_fn(StorageType::template destroy<Repr>)
+      , clone_fn(StorageType::template clone<Repr>)
     {
+      StorageType::template construct<Repr>(storage, static_cast<Args&&>(args)...);
     }
 
-    type_erased(const type_erased& other);
-    type_erased(type_erased&& other);
+    basic_erased_type(const basic_erased_type& other);
+    basic_erased_type(basic_erased_type&& other);
 
-    type_erased& operator=(const type_erased& other);
-    type_erased& operator=(type_erased&& other);
+    basic_erased_type& operator=(const basic_erased_type& other);
+    basic_erased_type& operator=(basic_erased_type&& other);
 
-    ~type_erased();
+    ~basic_erased_type();
   };
 
+
+  // copy
+  template <typename StorageType>
+  basic_erased_type<StorageType>::basic_erased_type(const basic_erased_type<StorageType>& other)
+    : destroy_fn(other.destroy_fn)
+    , clone_fn(other.clone_fn)
+  {
+    other.clone_fn(other.repr(), storage);
+  }
+
+  // move
+  template <typename StorageType>
+  basic_erased_type<StorageType>::basic_erased_type(basic_erased_type<StorageType>&& other)
+    : destroy_fn(other.destroy_fn)
+    , clone_fn(other.clone_fn)
+  {
+    storage.storage.copy_from(other.storage.storage);
+    other.storage.storage.write(nullptr);
+  }
+
+  template <typename StorageType>
+  basic_erased_type<StorageType>& basic_erased_type<StorageType>::operator=(const basic_erased_type<StorageType>& other)
+  {
+    // TODO self assignment check?
+    destroy_fn(repr(), storage);
+    other.clone_fn(other.repr(), storage);
+    destroy_fn = other.destroy_fn;
+    clone_fn = other.clone_fn;
+    return *this;
+  }
+
+  template <typename StorageType>
+  basic_erased_type<StorageType>& basic_erased_type<StorageType>::operator=(basic_erased_type<StorageType>&& other)
+  {
+    // TODO self assignment check?
+    destroy_fn(repr(), storage);
+    storage.storage.copy_from(other.storage.storage);
+    destroy_fn = other.destroy_fn;
+    clone_fn = other.clone_fn;
+    other.storage.storage.write(nullptr);
+    return *this;
+  }
+
+  template <typename StorageType>
+  basic_erased_type<StorageType>::~basic_erased_type()
+  {
+    destroy_fn(repr(), storage);
+  }
+
+  using type_erased = basic_erased_type<heap_storage>;
+
+  template <size_t StorageSize>
+  using buffered_type_erased = basic_erased_type<fixed_storage<StorageSize>>;
 
 }
 
