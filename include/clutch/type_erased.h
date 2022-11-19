@@ -10,6 +10,22 @@
 namespace clutch
 {
 
+  namespace detail
+  {
+    struct heap_allocator
+    {
+      void* allocate(size_t n) const
+      {
+        return std::malloc(n);
+      }
+
+      void deallocate(void *ptr) const
+      {
+        std::free(ptr);
+      }
+    };
+  }
+
   struct heap_storage
   {
     static constexpr size_t StorageSize = sizeof(void*);
@@ -24,6 +40,30 @@ namespace clutch
     {
       return storage.read_as<void*>();
     }
+
+    template <typename Repr, typename... Args>
+    static void construct(heap_storage& storage, Args&&... args)
+    {
+      void* ptr = detail::heap_allocator{}.allocate(sizeof(Repr));
+      new (ptr) Repr(static_cast<Args&&>(args)...);
+      storage.storage.write(ptr);
+    }
+
+    // TODO those are related operations
+    template <typename Repr>
+    static void destroy(void* repr, heap_storage& storage)
+    {
+      static_cast<Repr*>(repr)->~Repr();
+      detail::heap_allocator{}.deallocate(repr);
+      storage.storage.write(nullptr);
+    }
+
+    template <typename Repr>
+    static void clone(const void* repr, heap_storage& storage)
+    {
+      return construct<Repr>(storage, *static_cast<const Repr*>(repr));
+    }
+
 
     StorageType storage;
   };
@@ -43,48 +83,30 @@ namespace clutch
       return storage.data();
     }
 
-    StorageType storage;
-  };
-
-  namespace detail
-  {
-    struct heap_allocator
-    {
-      void* allocate(size_t n) const
-      {
-        return std::malloc(n);
-      }
-
-      void deallocate(void *ptr) const
-      {
-        std::free(ptr);
-      }
-    };
-
     template <typename Repr, typename... Args>
-    void default_construct(heap_storage& storage, Args&&... args)
+    static void construct(fixed_storage<StorageSize>& storage, Args&&... args)
     {
-      void* ptr = heap_allocator{}.allocate(sizeof(Repr));
+      // TODO Should alignment be considered here
+      static_assert(sizeof(typename std::remove_reference<Repr>::type) <= StorageSize);
+      void* ptr = storage.storage.data();
       new (ptr) Repr(static_cast<Args&&>(args)...);
-      storage.storage.write(ptr);
     }
 
     // TODO those are related operations
     template <typename Repr>
-    void default_destroy(void* repr, heap_storage& storage)
+    static void destroy(void* repr, fixed_storage<StorageSize>& storage)
     {
       static_cast<Repr*>(repr)->~Repr();
-      heap_allocator{}.deallocate(repr);
-      storage.storage.write(nullptr);
     }
 
     template <typename Repr>
-    void default_clone(const void* repr, heap_storage& storage)
+    static void clone(const void* repr, fixed_storage<StorageSize>& storage)
     {
-      return default_construct<Repr>(storage, *static_cast<const Repr*>(repr));
+      return construct<Repr>(storage, *static_cast<const Repr*>(repr));
     }
 
-  }
+    StorageType storage;
+  };
 
   template <typename T>
   struct in_place_t {};
@@ -115,18 +137,18 @@ namespace clutch
 
     template <typename Repr>
     type_erased(Repr p_repr, tag_t)
-      : destroy_fn(detail::default_destroy<Repr>)
-      , clone_fn(detail::default_clone<Repr>)
+      : destroy_fn(StorageType::destroy<Repr>)
+      , clone_fn(StorageType::clone<Repr>)
     {
-      detail::default_construct<Repr>(storage, static_cast<Repr>(p_repr));
+      StorageType::construct<Repr>(storage, static_cast<Repr>(p_repr));
     }
 
     template <typename Repr, typename... Args>
     type_erased(in_place_t<Repr> tag, Args&&... args)
-      : destroy_fn(detail::default_destroy<Repr>)
-      , clone_fn(detail::default_clone<Repr>)
+      : destroy_fn(StorageType::destroy<Repr>)
+      , clone_fn(StorageType::clone<Repr>)
     {
-      detail::default_construct<Repr>(storage, static_cast<Args&&>(args)...);
+      StorageType::construct<Repr>(storage, static_cast<Args&&>(args)...);
     }
 
     type_erased(const type_erased& other);
@@ -145,28 +167,6 @@ namespace clutch
 
     using DestroyFn = void(*)(void *, StorageType&);
     using CloneFn = void(*)(const void *, StorageType&);
-
-    template <typename Repr, typename... Args>
-    static void buffered_construct(StorageType& storage, Args&&... args)
-    {
-      // TODO Should alignment be considered here
-      static_assert(sizeof(typename std::remove_reference<Repr>::type) <= StorageSize);
-      void* ptr = storage.storage.data();
-      new (ptr) Repr(static_cast<Args&&>(args)...);
-    }
-
-    // TODO those are related operations
-    template <typename Repr>
-    static void buffered_destroy(void* repr, StorageType& storage)
-    {
-      static_cast<Repr*>(repr)->~Repr();
-    }
-
-    template <typename Repr>
-    static void buffered_clone(const void* repr, StorageType& storage)
-    {
-      return buffered_construct<Repr>(storage, *static_cast<const Repr*>(repr));
-    }
 
     StorageType storage;
     DestroyFn destroy_fn;
@@ -187,18 +187,18 @@ namespace clutch
 
     template <typename Repr>
     buffered_type_erased(Repr p_repr, tag_t)
-      : destroy_fn(buffered_destroy<Repr>)
-      , clone_fn(&buffered_clone<Repr>)
+      : destroy_fn(StorageType::template destroy<Repr>)
+      , clone_fn(&StorageType::template clone<Repr>)
     {
-      buffered_construct<Repr>(storage, static_cast<Repr>(p_repr));
+      StorageType::template construct<Repr>(storage, static_cast<Repr>(p_repr));
     }
 
     template <typename Repr, typename... Args>
     buffered_type_erased(in_place_t<Repr> tag, Args&&... args)
-      : destroy_fn(buffered_destroy<Repr>)
-      , clone_fn(buffered_clone<Repr>)
+      : destroy_fn(StorageType::template destroy<Repr>)
+      , clone_fn(StorageType::template clone<Repr>)
     {
-      buffered_construct<Repr>(storage, static_cast<Args&&>(args)...);
+      StorageType::template construct<Repr>(storage, static_cast<Args&&>(args)...);
     }
 
     buffered_type_erased(const buffered_type_erased& other);
