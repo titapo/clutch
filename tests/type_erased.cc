@@ -19,7 +19,7 @@ TEMPLATE_TEST_CASE("type_erased", "", clutch::type_erased, clutch::buffered_type
   REQUIRE(counted::count == 0);
   WHEN("created with a temporary")
   {
-    TypeErased te(counted{}, {});
+    TypeErased te(counted{});
     THEN("a single instance is held")
     {
       REQUIRE(counted::count == 1);
@@ -31,7 +31,7 @@ TEMPLATE_TEST_CASE("type_erased", "", clutch::type_erased, clutch::buffered_type
     REQUIRE(counted::count == 1);
     WHEN("type_erased created from it")
     {
-      TypeErased te(c1, {});
+      TypeErased te(c1);
       THEN("another instance is held")
       {
         REQUIRE(counted::count == 2);
@@ -84,7 +84,7 @@ struct S
 // NOTE: direct access to repr is considered as a bad practice
 TEMPLATE_TEST_CASE("transfer operations", "", clutch::type_erased, clutch::buffered_type_erased<16>)
 {
-  clutch::type_erased e(S{5}, {});
+  clutch::type_erased e(S{5});
   REQUIRE(static_cast<S*>(e.repr())->i == 5);
 
   WHEN("copied")
@@ -96,7 +96,7 @@ TEMPLATE_TEST_CASE("transfer operations", "", clutch::type_erased, clutch::buffe
 
   WHEN("copy-assigned")
   {
-    clutch::type_erased e2{S{20}, {}};
+    clutch::type_erased e2{S{20}};
     e2 = e;
     REQUIRE(static_cast<S*>(e.repr())->i == 5);
     REQUIRE(static_cast<S*>(e2.repr())->i == 5);
@@ -111,7 +111,7 @@ TEMPLATE_TEST_CASE("transfer operations", "", clutch::type_erased, clutch::buffe
 
   WHEN("move-assigned")
   {
-    clutch::type_erased e2{S{20}, {}};
+    clutch::type_erased e2{S{20}};
     e2 = std::move(e);
     REQUIRE(e.repr() == nullptr);
     REQUIRE(static_cast<S*>(e2.repr())->i == 5);
@@ -120,12 +120,11 @@ TEMPLATE_TEST_CASE("transfer operations", "", clutch::type_erased, clutch::buffe
   WHEN("swapped")
   {
     using std::swap;
-    clutch::type_erased e2{S{20}, {}};
+    clutch::type_erased e2{S{20}};
     swap(e, e2);
     REQUIRE(static_cast<S*>(e.repr())->i == 20);
     REQUIRE(static_cast<S*>(e2.repr())->i == 5);
   }
-
 }
 
 
@@ -154,7 +153,7 @@ class Animal : public TypeErasedBase
 
     template <typename T>
     Animal(T&& t)
-      : TypeErasedBase(t, {})
+      : TypeErasedBase(t)
       , talk_fn(&clutch::erase_mem_fn<&T::talk>::call)
       , eat_fn(&clutch::erase_mem_fn<&T::eat>::call)
     {}
@@ -281,7 +280,7 @@ class Widget : public TypeErasedBase
     /*
     template <typename T>
     Widget(T&& t)
-      : TypeErasedBase(t, {})
+      : TypeErasedBase(t)
       , foo_fn(&clutch::erase_fn<&foo>::call)
       //, bar_fn(&clutch::erase_fn<&bar>::call)
     {}

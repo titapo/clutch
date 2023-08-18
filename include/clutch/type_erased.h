@@ -134,8 +134,8 @@ namespace clutch
     // used for distinguish templatized constructor from copy/move constructors
     struct tag_t {};
 
-    template <typename Repr>
-    basic_erased_type(Repr p_repr, tag_t)
+    template <typename Repr, typename = std::enable_if<!std::is_same_v<Repr, basic_erased_type<StorageType>>>>
+    basic_erased_type(Repr p_repr)
       : destroy_fn(StorageType::template destroy<Repr>)
       , clone_fn(&StorageType::template clone<Repr>)
     {
